@@ -15,11 +15,11 @@ load("PA_M_2006_2018_full.RData")
 
 data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
 
-county <- readOGR("tl_2019_us_county.shp",layer = "tl_2019_us_county", GDAL1_integer64_policy = TRUE) 
+# API for county boundaries------------------ 
+county_bound <- readOGR("https://maps.pasda.psu.edu/arcgis/rest/services/pasda/PennDOT/MapServer/7/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryPolygon&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=*&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&returnDistinctValues=false&resultOffset=&resultRecordCount=&f=pjson")
 
-county_bound <- subset(county, STATEFP == 42) 
 
-
+# remove NA municipal
 PA_M_2006_2018_full <- subset(PA_M_2006_2018_full, full_municipal_name != "County Subdivisions Not Defined, Erie County, PA")
 data_1 <- subset(data, NAME_x != "County subdivisions not defined")
 
@@ -35,33 +35,32 @@ PA_M_2006_2018_full$date <- as.Date(
     paste(PA_M_2006_2018_full$Reporting_Year, 1, 1, sep="-"))
 
 # get names of indicators 
-
 indi_name <- colnames(PA_M_2006_2018_full)[9:19]
 
-# Avoid plotly issues -----------------------------------
+# Avoid plotly issues 
 pdf(NULL)
 
 
 
-# Define UI for application that draws a histogram
+# Define UI for application------------------------------------
 ui <- dashboardPage(
     # change dashboard color
     skin = "black",
     
-    # create header--------------------------------------
+    ## create header--------------------------------------
     dashboardHeader(
         title = "PA Municipalities Public Finance Data (2006-2018)",
         titleWidth = 500
     ),
     
-    # create sidebar ----------------------------------------
+    ## create sidebar ----------------------------------------
     dashboardSidebar(
         sidebarMenu(
             menuItem("Revenue Analysis", 
                      tabName = "RA", 
                      icon = icon("money-bill-wave")),
             
-            menuItem("Sources and Download", 
+            menuItem("Sources", 
                      tabName = "Source", 
                      icon = icon("download")),
             
@@ -119,7 +118,7 @@ ui <- dashboardPage(
             
         )
     ),
-    # create body--------------------------------
+    ## create body--------------------------------
     dashboardBody(
         tabItems(
             ### first page------------------------
@@ -153,7 +152,7 @@ ui <- dashboardPage(
                         )
                     )
             ),
-            # Second page---------------------
+            ### Second page---------------------
             tabItem(tabName = "Source",
                     h2("Source"),
                     
@@ -172,10 +171,10 @@ ui <- dashboardPage(
             
 
 
-# Define server logic required to draw a histogram
+# Define server logic ---------------------------
 server <- function(input, output) {
     
-    # subset data -----------------------------------
+    ## subset data -----------------------------------
     # reactive subsetting for single year charts and map 
     PA_subset_d <- reactive({
         req(input$year)
@@ -208,12 +207,12 @@ server <- function(input, output) {
         return(a)
     })
     
-    # add debounce---------------------------------
+    ## add debounce---------------------------------
     PA_subset <- debounce(PA_subset_d, 2000)
     
     PA_subset_time <- debounce(PA_subset_time_d, 2000)
     
-    # create polygons with data----------------------------
+    ## create polygons with data----------------------------
     mapdata_1 <- reactive({
         
         # creating long table for filtering
@@ -237,7 +236,7 @@ server <- function(input, output) {
     return(data_2)
     })
     
-    # Create leaflet map------------------------------
+    ## Create leaflet map------------------------------
     output$map <- renderLeaflet({
         leaflet() %>%
             addProviderTiles(providers$CartoDB.Positron) %>% 
@@ -245,7 +244,7 @@ server <- function(input, output) {
         })
     
     
-    # mapping changes to input---------------------
+    ## mapping changes to input---------------------
     observe({
         mapdata <- mapdata_1()
         
@@ -260,12 +259,12 @@ server <- function(input, output) {
             clearControls() %>%
             
             addPolygons(fillColor = ~pal(Amount),
-                            fillOpacity = 1,
+                            fillOpacity = 0.6,
                             weight = 1,
                             highlight = highlightOptions(
                                 weight = 5,
                                 color = "black",
-                                fillOpacity = 1,
+                                fillOpacity = 0.7,
                                 bringToFront = TRUE),
                             popup = ~paste(
                                 full_municipal_name, "<br/>",
@@ -280,28 +279,28 @@ server <- function(input, output) {
         })
 
     
-    # reset zoom level------------------------------
+    ## reset zoom level------------------------------
     observeEvent(input$reset,{
         mapdata <- mapdata_1()
         leafletProxy("map", data = mapdata) %>% 
             setView(lng = -77.5000, lat = 41.2033, zoom = 7)
     })
     
-    # creating county subset
+    ## creating county subset----------------------------------
     county_a <- reactive({
         if (length(input$county_1) > 0) {
-            county_1 <- subset(county_bound, NAME %in% PA_subset()$county_name)
+            county_1 <- subset(county_bound, COUNTY_NAM %in% toupper(PA_subset()$county_name))
         } else{
         county_1 <- county_bound
         }
         return(county_1)
     })
     
-    # add debounce---------------------------------
+    ## add debounce---------------------------------
     # added to make sure the creation of the lines are done last when county selection changes
-    county_1 <- debounce(county_a, 3000)
+    county_1 <- debounce(county_a, 2000)
     
-    # add lines for county boundaries 
+    ## add county boundaries---------------- 
     observe({
     leafletProxy("map", data = county_1()) %>%
         # clear plot  
@@ -313,7 +312,7 @@ server <- function(input, output) {
                     group = "county")
     })
     
-    ### line charts----------------------------------
+    ## line charts----------------------------------
     output$line <- renderPlotly({
         
         # change to longer to get indicator
@@ -350,7 +349,7 @@ server <- function(input, output) {
         )
     })
     
-    ### bar chart---------------------------
+    ## bar chart---------------------------
     output$bar <- renderPlotly({
 
         # create table of median percentage share
@@ -387,7 +386,7 @@ server <- function(input, output) {
     })
     
     
-    ### Create data table page 1-------------------------------
+    ## Create data table-------------------------------
     output$table1 <- DT::renderDataTable({
         a <- DT::datatable(data = PA_subset_time()[,c(2:3,7:9,11,12,14,16,18)], 
                            options = list(pageLength = 10), 
@@ -412,7 +411,7 @@ server <- function(input, output) {
         return(a)
     })
     
-    # download data table -----------------------------
+    ## download data table -----------------------------
     
     output$download <- downloadHandler(
         filename = function() {
@@ -426,7 +425,7 @@ server <- function(input, output) {
         }
     )
     
-    # source text -----------------------------
+    ## source text -----------------------------
     output$source_1 <- renderUI({
         url_1 <- tags$a(href="http://munstats.pa.gov/Reports/ReportInformation2.aspx?report=StatewideMuniAfr", "PA Department of Community & Economic Development")
         url_2 <- tags$a(href="https://www.census.gov/cgi-bin/geo/shapefiles/index.php", "Census Shapefile")
@@ -446,5 +445,5 @@ server <- function(input, output) {
 
     }
 
-# Run the application 
+# Run the application ------------------------------
 shinyApp(ui = ui, server = server)
