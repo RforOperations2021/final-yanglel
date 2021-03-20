@@ -123,10 +123,7 @@ ui <- dashboardPage(
                     ),
                     fluidRow(
                         box(plotlyOutput("line"), 
-                            height= "450px",
-                            "Fund balance is the accumulated financial resources that is still unused over the years.", 
-                            br(), 
-                            "Median is used due to large outliers."),
+                            height= "450px"),
                         
                         box(plotlyOutput("bar"),
                             height= "450px")
@@ -223,10 +220,6 @@ server <- function(input, output) {
         
         # create color palette
         pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
-        
-        NA_op <- function(x) {
-            ifelse(is.na(x), 0, 1)
-        }
     
         leafletProxy("map", data = mapdata) %>% 
             # clear plot  
@@ -267,6 +260,7 @@ server <- function(input, output) {
     ### line charts
     output$line <- renderPlotly({
         
+        # change to longer to get indicator
         pivot_measure <- colnames(PA_subset_time())[c(9:19)]
         
         u3 <- PA_subset_time() %>%
@@ -294,6 +288,40 @@ server <- function(input, output) {
                     "Types of Revenue Per Capita (Median)", "\nFrom",min(input$year), "To", max(input$year)))+ 
                 scale_color_discrete(name = "Indicator"),
             tooltip = c("x", "y")
+        )
+    })
+    
+    ### bar chart---------------------------
+    output$bar <- renderPlotly({
+
+        # create table of median percentage share
+        med_subset_1 <- PA_subset() %>%
+            mutate(
+                total_share = Total_Revenues/Total_Revenues,
+                tax_share = Total_Taxes_Revenues/Total_Revenues,
+                cf_share = total_charges_and_fees_Revenues/Total_Revenues,
+                ig_share = total_intergovernmental_Revenues/Total_Revenues,
+                other_share = total_other_Revenues/Total_Revenues) %>% 
+            summarize(
+                Total = round(((median(total_share, na.rm = T))*100),0),
+                Tax = round(((median(tax_share, na.rm = T))*100),0),
+                "Charges & Fees" = round(((median(cf_share, na.rm = T))*100),0),
+                Intergovernmental = round(((median(ig_share, na.rm = T))*100),0),
+                Others = round(((median(other_share, na.rm = T))*100),0)
+            ) %>% 
+            pivot_longer(c("Total","Tax","Charges & Fees","Intergovernmental", "Others"), names_to = "Type", values_to = "share")
+        
+        med_subset_1$Type <- factor(med_subset_1$Type, levels = c("Others","Intergovernmental","Charges & Fees","Tax", "Total"))
+        
+        ### plot
+        ggplotly(
+            ggplot(data = med_subset_1, aes(x = Type, y = share)) +
+                geom_bar(stat = "identity", position = "dodge") +
+                xlab("Revenue Type") + 
+                ylab("Median Share of Total Revenue(%)") +
+                labs(title = (paste("Types of Revenues In", max(input$year))))+ 
+                coord_flip(),
+            tooltip = c("y")    
         )
     })
         
