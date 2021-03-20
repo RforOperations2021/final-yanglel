@@ -29,7 +29,7 @@ PA_M_2006_2018_full$date <- as.Date(
 indi_name <- colnames(PA_M_2006_2018_full)[9:19]
 
 # Avoid plotly issues -----------------------------------
-#pdf(NULL)
+pdf(NULL)
 
 
 
@@ -105,15 +105,6 @@ ui <- dashboardPage(
                 choices = county,
                 selectize = T ,
                 multiple =  T
-            ),
-            
-            # create second county comparison group
-            selectInput(
-                inputId = "county_2",
-                label = "County Group 2 (Type to search, backspace to delete)",
-                choices = county,
-                selectize = T ,
-                multiple =  T
             )
             
             )
@@ -124,20 +115,27 @@ ui <- dashboardPage(
             ### first page------------------------
             tabItem(tabName = "RA",
                     h2("Revenue Breakdown"),
-                    h4("Is there enough population to create revenue?"),
-                    # fluidRow(
-                    #     "Group 1",
-                    #     valueBoxOutput("YearOfDeficit", width = 3 ),
-                    #     valueBoxOutput("Numberofdeficits", width = 3),
-                    #     valueBoxOutput("DeficitSize", width = 3)
-                    # ),
                         
                     fluidRow(    
                         box(
                             leafletOutput("map"), 
                             width = 12)
-                    )
+                    ),
+                    fluidRow(
+                        box(plotlyOutput("line"), 
+                            height= "450px",
+                            "Fund balance is the accumulated financial resources that is still unused over the years.", 
+                            br(), 
+                            "Median is used due to large outliers."),
+                        
+                        box(plotlyOutput("bar"),
+                            height= "450px")
+                    ),
+                    
+                    fluidRow(
+                        box(DT::dataTableOutput(outputId = "table2"), width = 12)
     )
+)
 )
 )
 )
@@ -202,11 +200,13 @@ server <- function(input, output) {
             filter(Indicator == input$indicator) %>% 
             filter(!is.na(Amount))
         
+        data_2 <- data_1[data_1$GEOID %in% u2$GEOID,]
+        
     # merging of spatial with data
-    data_1@data <- merge(data_1@data,u2, by = "GEOID", all.x = TRUE) 
+    data_2@data <- merge(data_2@data,u2, by.x = "GEOID", by.y = "GEOID") 
     
 
-    return(data_1)
+    return(data_2)
     })
     
     # Create leaflet map------------------------------
@@ -252,7 +252,7 @@ server <- function(input, output) {
             addLegend(pal = pal, 
                       values = ~Amount, 
                       opacity = 0.7, 
-                      title = paste(input$indicator,"<br/>", "Quantile"), position = "bottomright")
+                      title = paste(max(input$year), input$indicator,"<br/>", "Quantile"), position = "bottomright")
         })
 
     
@@ -261,6 +261,40 @@ server <- function(input, output) {
         mapdata <- mapdata_1()
         leafletProxy("map", data = mapdata) %>% 
             setView(lng = -77.5000, lat = 41.2033, zoom = 7)
+    })
+    
+    ### charts for second page------------------------------
+    ### line charts
+    output$line <- renderPlotly({
+        
+        pivot_measure <- colnames(PA_subset_time())[c(9:19)]
+        
+        u3 <- PA_subset_time() %>%
+            pivot_longer(
+                cols = all_of(pivot_measure),
+                names_to = "Indicator",
+                values_to = "Amount"
+            ) %>% 
+            filter(Indicator %in% c("Taxes_Per_Capita", "charges_and_fees_per_capita", "intergovernmental_per_capita", "other_Revenues_per_capita" )) %>% 
+            filter(!is.na(Amount))
+        
+        # create table of median
+        med_subset_time_1 <- u3 %>%
+            group_by(Indicator,date) %>%
+            summarize(median = median(Amount, na.rm = T))
+        
+        ggplotly(
+            ggplot(data = med_subset_time_1, aes(x = date, y = median)) +
+                geom_line(aes(color = Indicator)) +
+                geom_point(aes(color = Indicator)) +
+                scale_x_date(date_labels = "%Y", date_breaks = "3 years") +
+                xlab("Year") +
+                ylab("Revenue Per Capita") +
+                labs(title = paste(
+                    "Types of Revenue Per Capita (Median)", "\nFrom",min(input$year), "To", max(input$year)))+ 
+                scale_color_discrete(name = "Indicator"),
+            tooltip = c("x", "y")
+        )
     })
         
 
