@@ -55,6 +55,12 @@ ui <- dashboardPage(
                      tabName = "Source", 
                      icon = icon("download")),
             
+            # reset zoom button
+            actionButton(
+                inputId = "reset",
+                label = "Return to Default Zoom"
+            ),
+            
             # create filters
             sliderInput(
                 inputId = "year",
@@ -125,9 +131,10 @@ ui <- dashboardPage(
                     #     valueBoxOutput("Numberofdeficits", width = 3),
                     #     valueBoxOutput("DeficitSize", width = 3)
                     # ),
-                    
-                    fluidRow(
-                        box(leafletOutput("map"), 
+                        
+                    fluidRow(    
+                        box(
+                            leafletOutput("map"), 
                             width = 12)
                     )
     )
@@ -141,39 +148,52 @@ ui <- dashboardPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+    
     # subset data -----------------------------------
-    # reactive subsetting for single year charts 
-    PA_subset <- reactive({
+    # reactive subsetting for single year charts and map 
+    PA_subset_d <- reactive({
         req(input$year)
         req(input$type)
-        a <- subset(data@data,((Reporting_Year == max(input$year)) & 
-                       (Municipality_Type %in% input$type)))
+        a <- PA_M_2006_2018_full %>% 
+            filter((Reporting_Year == max(input$year)) & 
+                       (Municipality_Type %in% input$type))
         
         if (length(input$county_1) > 0) {
-            a <- subset(data@data,((county_name %in% input$county_1) | 
-                           (county_name_2a %in% input$county_1))) 
+            a <- a %>% 
+                filter((county_name %in% input$county_1) | 
+                           (county_name_2a %in% input$county_1)) 
         }
         return(a)
     })
     
-    # # create reative subset for mutiple years data
-    # PA_subset_time <- reactive({
-    #     req(input$year)
-    #     req(input$type) 
-    #     a <- data %>% 
-    #         filter((Reporting_Year <= max(input$year)) &
-    #                    (Reporting_Year >= min(input$year)) &
-    #                    (Municipality_Type %in% input$type))
-    #     if (length(input$county_1) > 0) {
-    #         a <- a %>% 
-    #             filter((county_name %in% input$county_1) | 
-    #                        (county_name_2a %in% input$county_1)) 
-    #     }
-    #     return(a)
-    # })  
+    # create reative subset for mutiple years data
+    PA_subset_time_d <- reactive({
+        req(input$year)
+        req(input$type) 
+        a <- PA_M_2006_2018_full %>% 
+            filter((Reporting_Year <= max(input$year)) &
+                       (Reporting_Year >= min(input$year)) &
+                       (Municipality_Type %in% input$type))
+        if (length(input$county_1) > 0) {
+            a <- a %>% 
+                filter((county_name %in% input$county_1) | 
+                           (county_name_2a %in% input$county_1)) 
+        }
+        return(a)
+    })
     
-    # Create map
+    # add debounce
+    PA_subset <- debounce(PA_subset_d, 5000)
+    
+    PA_subset_time <- debounce(PA_subset_time_d, 5000)
+    
+    
+    # Create leaflet map------------------------------
     output$map <- renderLeaflet({
+        
+        # create polygons with data
+        data@data <- merge(data@data, PA_subset(), by = "GEOID")
+        
         mapdata <- data
         
         # pal <- reactive({
@@ -183,9 +203,20 @@ server <- function(input, output) {
         #     NULL)
         #     })
         
-            leaflet(mapdata) %>%
-                addTiles() %>% 
+        Rmap <- leaflet(mapdata) %>%
+                addProviderTiles(providers$CartoDB.Positron) %>% 
                 addPolygons()
+        
+        observeEvent(input$reset,{
+            
+        Rmap <- Rmap %>% 
+            clearBounds()
+        })
+        
+        return(Rmap)
+        
+        
+        
         # %>% 
         #         addPolygons(color = ~pal(input$indicator))
         
@@ -199,7 +230,7 @@ server <- function(input, output) {
             # setView(-74.0060, 40.7128, 9) %>%
             # addLayersControl(baseGroups = c("Google", "Wiki"))
     })
-    
+        
 
 
     }
