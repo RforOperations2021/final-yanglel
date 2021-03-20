@@ -30,8 +30,6 @@ pdf(NULL)
 
 
 
-
-
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
     # change dashboard color
@@ -83,14 +81,35 @@ ui <- dashboardPage(
                 )
             ),
             
-            # create county comparison filters
+            # create radio button for indicator choice
+            radioButtons(
+                inputId = "indicator",
+                label = "Revenue Indicator",
+                choices = c("Surplus/Deficit",
+                            "Revenue Per Capita",
+                            "Total Revenue"),
+                selected = "Surplus/Deficit"
+                
+            ),
+            
+            # create first county comparison filters
             selectInput(
                 inputId = "county_1",
-                label = "County Set (Type to search, backspace to delete)",
+                label = "County Group 1 (Type to search, backspace to delete)",
+                choices = county,
+                selectize = T ,
+                multiple =  T
+            ),
+            
+            # create second county comparison group
+            selectInput(
+                inputId = "county_2",
+                label = "County Group 2 (Type to search, backspace to delete)",
                 choices = county,
                 selectize = T ,
                 multiple =  T
             )
+            
             )
         ),
     # create body--------------------------------
