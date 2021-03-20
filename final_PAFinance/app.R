@@ -8,22 +8,25 @@ require(rgdal)
 require(leaflet)
 
 # load data----------------------------------
-data <- readOGR(".", "municipal_disso")
-PA_M_2006_2018_full <- read_csv("PA_M_2006_2018_full.csv",
-                 col_types = cols(county_name_2 = col_character(),
-                                  county_name_type_2 = col_character(),
-                                  GEOID = col_character()))
+data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
+load("PA_M_2006_2018_full.RData")
 
-data@data <- merge(data@data, PA_M_2006_2018_full, by = "GEOID")
+#data@data <- merge(data@data, PA_M_2006_2018_full, by = "GEOID")
 
+# get number of years
 year_min <- min(PA_M_2006_2018_full$Reporting_Year)
 year_max <- max(PA_M_2006_2018_full$Reporting_Year)
+
 # get list of county names
-county <- unique(c(PA_M_2006_2018_full$county_name, PA_M_2006_2018_full$county_name_2))
+county <- unique(c(PA_M_2006_2018_full$county_name, PA_M_2006_2018_full$county_name_2a))
 
 # create date variable
 PA_M_2006_2018_full$date <- as.Date(
     paste(PA_M_2006_2018_full$Reporting_Year, 1, 1, sep="-"))
+
+# get names of indicators 
+
+indi_name <- colnames(PA_M_2006_2018_full)[9:19]
 
 # Avoid plotly issues -----------------------------------
 pdf(NULL)
@@ -81,15 +84,12 @@ ui <- dashboardPage(
                 )
             ),
             
-            # create radio button for indicator choice
-            radioButtons(
+            # create dropdown box for indicator choice
+            selectInput(
                 inputId = "indicator",
-                label = "Revenue Indicator",
-                choices = c("Surplus/Deficit",
-                            "Revenue Per Capita",
-                            "Total Revenue"),
-                selected = "Surplus/Deficit"
-                
+                label = "Indicator For Map",
+                choices = indi_name,
+                selected = indi_name[3]
             ),
             
             # create first county comparison filters
@@ -114,14 +114,92 @@ ui <- dashboardPage(
         ),
     # create body--------------------------------
     dashboardBody(
+        tabItems(
+            ### first page------------------------
+            tabItem(tabName = "RA",
+                    h2("Revenue Breakdown"),
+                    h4("Is there enough population to create revenue?"),
+                    # fluidRow(
+                    #     "Group 1",
+                    #     valueBoxOutput("YearOfDeficit", width = 3 ),
+                    #     valueBoxOutput("Numberofdeficits", width = 3),
+                    #     valueBoxOutput("DeficitSize", width = 3)
+                    # ),
+                    
+                    fluidRow(
+                        box(leafletOutput("map"), 
+                            width = 12)
+                    )
     )
 )
+)
+)
+
             
             
 
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+    # subset data -----------------------------------
+    # reactive subsetting for single year charts 
+    PA_subset <- reactive({
+        req(input$year)
+        req(input$type)
+        a <- subset(data@data,((Reporting_Year == max(input$year)) & 
+                       (Municipality_Type %in% input$type)))
+        
+        if (length(input$county_1) > 0) {
+            a <- subset(data@data,((county_name %in% input$county_1) | 
+                           (county_name_2a %in% input$county_1))) 
+        }
+        return(a)
+    })
+    
+    # # create reative subset for mutiple years data
+    # PA_subset_time <- reactive({
+    #     req(input$year)
+    #     req(input$type) 
+    #     a <- data %>% 
+    #         filter((Reporting_Year <= max(input$year)) &
+    #                    (Reporting_Year >= min(input$year)) &
+    #                    (Municipality_Type %in% input$type))
+    #     if (length(input$county_1) > 0) {
+    #         a <- a %>% 
+    #             filter((county_name %in% input$county_1) | 
+    #                        (county_name_2a %in% input$county_1)) 
+    #     }
+    #     return(a)
+    # })  
+    
+    # Create map
+    output$map <- renderLeaflet({
+        mapdata <- data
+        
+        # pal <- reactive({
+        # <- input$indicator
+        # colorNumeric(
+        #     palette = "Purples",
+        #     NULL)
+        #     })
+        
+            leaflet(mapdata) %>%
+                addTiles() %>% 
+                addPolygons()
+        # %>% 
+        #         addPolygons(color = ~pal(input$indicator))
+        
+        
+
+        
+        # leaflet(data = cds) %>%
+        #     addProviderTiles("Stamen.Toner") %>%
+        #     addPolygons(color = ~pal(`Life Expectancy at Birth (years)`)
+            # addProviderTiles(provider = providers$Wikimedia, group = "Wiki") %>%
+            # setView(-74.0060, 40.7128, 9) %>%
+            # addLayersControl(baseGroups = c("Google", "Wiki"))
+    })
+    
 
 
     }
