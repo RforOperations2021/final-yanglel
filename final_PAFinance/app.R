@@ -11,8 +11,6 @@ require(leaflet)
 data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
 load("PA_M_2006_2018_full.RData")
 
-#data@data <- merge(data@data, PA_M_2006_2018_full, by = "GEOID")
-
 # get number of years
 year_min <- min(PA_M_2006_2018_full$Reporting_Year)
 year_max <- max(PA_M_2006_2018_full$Reporting_Year)
@@ -189,24 +187,46 @@ server <- function(input, output) {
     
     # create polygons with data
     mapdata_1 <- reactive({
-    data@data <- merge(data@data, PA_subset(), by = "GEOID")
+        
+        pivot_measure <- colnames(PA_subset())[c(9:19)]
+
+        u2 <- PA_subset() %>%
+            pivot_longer(
+                cols = all_of(pivot_measure),
+                names_to = "Indicator",
+                values_to = "Amount"
+            ) %>% 
+            filter(Indicator %in% input$indicator)
+    data@data <- merge(data@data,u2, by = "GEOID")
     return(data)
     })
     
     # Create leaflet map------------------------------
     output$map <- renderLeaflet({
-        
+        # 
+        # indica <- input$indicator
+        # num <- which(colnames(PA_M_2006_2018_full) %in% indica)
         mapdata <- mapdata_1()
-        # pal <- reactive({
-        # <- input$indicator
-        # colorNumeric(
-        #     palette = "Purples",
-        #     NULL)
-        #     })
+                                
+        pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
+ 
         
         leaflet(mapdata) %>%
                 addProviderTiles(providers$CartoDB.Positron) %>% 
-                addPolygons()
+            addPolygons(data = mapdata$county_name) %>% 
+                addPolygons(fillColor = ~pal(Amount), 
+                            fillOpacity = 0.7,
+                            weight = 1,
+                            highlight = highlightOptions(
+                                weight = 5,
+                                color = "black",
+                                fillOpacity = 0.7,
+                                bringToFront = TRUE),
+                            popup = ~paste(
+                                full_municipal_name, "<br/>",
+                                Reporting_Year, "<br/>",
+                                "$", round(Amount, 2))) %>%
+            addLegend(pal = pal, values = ~Amount, opacity = 0.7, title = paste(input$indicator,"<br/>", "Quantile"), position = "bottomright")
         
         
         
