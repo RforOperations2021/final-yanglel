@@ -4,14 +4,21 @@ library(ggplot2)
 library(tools)
 library(shinydashboard)
 library(plotly)
-require(rgdal)
-require(leaflet)
+library(rgdal)
+library(leaflet)
+library(spdplyr)
 
 
 
 # load data----------------------------------
-data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
 load("PA_M_2006_2018_full.RData")
+
+data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
+
+county <- readOGR("tl_2019_us_county.shp",layer = "tl_2019_us_county", GDAL1_integer64_policy = TRUE) 
+
+county_bound <- subset(county, STATEFP == 42) 
+
 
 PA_M_2006_2018_full <- subset(PA_M_2006_2018_full, full_municipal_name != "County Subdivisions Not Defined, Erie County, PA")
 data_1 <- subset(data, NAME_x != "County subdivisions not defined")
@@ -148,7 +155,7 @@ ui <- dashboardPage(
             ),
             # Second page---------------------
             tabItem(tabName = "Source",
-                    h2("Source and Download"),
+                    h2("Source"),
                     
                     fluidRow(
                         box(uiOutput("source_1"),
@@ -273,15 +280,40 @@ server <- function(input, output) {
         })
 
     
-    # reset zoom level
+    # reset zoom level------------------------------
     observeEvent(input$reset,{
         mapdata <- mapdata_1()
         leafletProxy("map", data = mapdata) %>% 
             setView(lng = -77.5000, lat = 41.2033, zoom = 7)
     })
     
-    ### charts for second page------------------------------
-    ### line charts
+    # creating county subset
+    county_a <- reactive({
+        if (length(input$county_1) > 0) {
+            county_1 <- subset(county_bound, NAME %in% PA_subset()$county_name)
+        } else{
+        county_1 <- county_bound
+        }
+        return(county_1)
+    })
+    
+    # add debounce---------------------------------
+    # added to make sure the creation of the lines are done last when county selection changes
+    county_1 <- debounce(county_a, 3000)
+    
+    # add lines for county boundaries 
+    observe({
+    leafletProxy("map", data = county_1()) %>%
+        # clear plot  
+        clearGroup("county") %>%
+        
+        addPolygons(weight = 3,
+                    fill = FALSE,
+                    color = "black",
+                    group = "county")
+    })
+    
+    ### line charts----------------------------------
     output$line <- renderPlotly({
         
         # change to longer to get indicator
