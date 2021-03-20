@@ -6,12 +6,15 @@ library(shinydashboard)
 library(plotly)
 require(rgdal)
 require(leaflet)
+library(sp)
+
 
 # load data----------------------------------
 data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
 load("PA_M_2006_2018_full.RData")
 
-data_1 <- subset(data, GEOID != 4204900000)
+PA_M_2006_2018_full <- subset(PA_M_2006_2018_full, full_municipal_name != "County Subdivisions Not Defined, Erie County, PA")
+data_1 <- subset(data, NAME_x != "County subdivisions not defined")
 
 # get number of years
 year_min <- min(PA_M_2006_2018_full$Reporting_Year)
@@ -150,8 +153,8 @@ server <- function(input, output) {
         req(input$year)
         req(input$type)
         a <- PA_M_2006_2018_full %>% 
-            filter((Reporting_Year == max(input$year)) & 
-                       (Municipality_Type %in% input$type))
+            filter((Reporting_Year == max(input$year))) %>% 
+            filter((Municipality_Type %in% input$type))
         
         if (length(input$county_1) > 0) {
             a <- a %>% 
@@ -187,20 +190,20 @@ server <- function(input, output) {
         
         # creating long table for filtering
         pivot_measure <- colnames(PA_subset())[c(9:19)]
-
+        
         u2 <- PA_subset() %>%
             pivot_longer(
                 cols = all_of(pivot_measure),
                 names_to = "Indicator",
                 values_to = "Amount"
             ) %>% 
-            filter(Indicator == input$indicator) %>% 
-            filter(!is.na(Amount))
+            filter(Indicator == input$indicator) 
         
-        data_2 <- data_1[data_1$GEOID %in% u2$GEOID,]
+        # remove NA shapes
+        data_2 <- subset(data_1, GEOID %in% unique(u2$GEOID))
         
     # merging of spatial with data
-    data_2@data <- merge(data_2@data,u2, by.x = "GEOID", by.y = "GEOID") 
+    data_2@data <- left_join(data_2@data,u2, by = "GEOID") 
     
 
     return(data_2)
@@ -229,12 +232,12 @@ server <- function(input, output) {
             clearControls() %>%
             
             addPolygons(fillColor = ~pal(Amount),
-                            fillOpacity = 0.7,
+                            fillOpacity = 1,
                             weight = 1,
                             highlight = highlightOptions(
                                 weight = 5,
                                 color = "black",
-                                fillOpacity = 0.7,
+                                fillOpacity = 1,
                                 bringToFront = TRUE),
                             popup = ~paste(
                                 full_municipal_name, "<br/>",
@@ -345,13 +348,13 @@ server <- function(input, output) {
                                        "Charges\n& Fees" = "total_charges_and_fees_Revenues",  
                                         "Intergovernmental" = "total_intergovernmental_Revenues",
                                        "Others" = "total_other_Revenues",
-                                       "Population" = "Population"
+                                       "Pop" = "Population"
                            ),
                            style = 'bootstrap',
                            caption = 'Table 1: Revenue Breakdown',
                            filter = 'top'
         ) %>% 
-            DT::formatCurrency(5:9, digits = 0)
+            DT::formatCurrency(5:10, digits = 0)
         
         return(a)
     })
