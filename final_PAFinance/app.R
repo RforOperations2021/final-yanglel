@@ -6,7 +6,7 @@ library(shinydashboard)
 library(plotly)
 require(rgdal)
 require(leaflet)
-library(sp)
+
 
 
 # load data----------------------------------
@@ -101,24 +101,24 @@ ui <- dashboardPage(
                 selected = indi_name[3]
             ),
             
-            # create first county comparison filters
+            # create county filters
             selectInput(
                 inputId = "county_1",
-                label = "County Group 1 (Type to search, backspace to delete)",
+                label = "County Group(Type to search, backspace to delete)",
                 choices = county,
                 selectize = T ,
                 multiple =  T
             )
             
-            )
-        ),
+        )
+    ),
     # create body--------------------------------
     dashboardBody(
         tabItems(
             ### first page------------------------
             tabItem(tabName = "RA",
                     h2("Revenue Breakdown"),
-                        
+                    
                     fluidRow(    
                         box(
                             leafletOutput("map"), 
@@ -132,13 +132,34 @@ ui <- dashboardPage(
                             height= "450px")
                     ),
                     
+                    # download button
                     fluidRow(
-                        box(DT::dataTableOutput(outputId = "table1"), width = 12)
+                        box(downloadButton(
+                        outputId = "download",
+                        label = "Download Data Table")
+                        )),
+                        
+                        br(),
+                    
+                    fluidRow(
+                        box(DT::dataTableOutput(outputId = "table1"), width = 12
+                        )
+                    )
+            ),
+            # Second page---------------------
+            tabItem(tabName = "Source",
+                    h2("Source and Download"),
+                    
+                    fluidRow(
+                        box(uiOutput("source_1"),
+                            width = 12
+                        )
+                    )
+            )
+        )
     )
 )
-)
-)
-)
+
 
             
             
@@ -336,7 +357,7 @@ server <- function(input, output) {
     
     ### Create data table page 1-------------------------------
     output$table1 <- DT::renderDataTable({
-        a <- DT::datatable(data = PA_subset()[,c(2:3,7:9,11,12,14,16,18)], 
+        a <- DT::datatable(data = PA_subset_time()[,c(2:3,7:9,11,12,14,16,18)], 
                            options = list(pageLength = 10), 
                            rownames = FALSE,
                            colnames = c("Year" = "Reporting_Year",
@@ -357,6 +378,36 @@ server <- function(input, output) {
             DT::formatCurrency(5:10, digits = 0)
         
         return(a)
+    })
+    
+    # download data table -----------------------------
+    
+    output$download <- downloadHandler(
+        filename = function() {
+            paste("PA_From", min(input$year), "To", max(input$year), ".csv", 
+                  sep = "")
+        },
+        content = function(file) {
+            b <- PA_subset_time() %>% 
+                select(-c(date,county_name,county_name_2a,deficit))
+            write.csv(b, file, row.names = FALSE)
+        }
+    )
+    
+    # source text -----------------------------
+    output$source_1 <- renderUI({
+        url_1 <- tags$a(href="http://munstats.pa.gov/Reports/ReportInformation2.aspx?report=StatewideMuniAfr", "PA Department of Community & Economic Development")
+        url_2 <- tags$a(href="https://www.census.gov/cgi-bin/geo/shapefiles/index.php", "Census Shapefile")
+        
+        tags$div(
+            h1("This Data Set was cleaned and merged using the following sources:"),
+            br(),
+            tagList("1. Municipal Data:", url_1 ),
+            br(),
+            tagList("2. Municipal Names:", url_2 ),
+            br(),
+            p("To get accurate municipal names and its corresponding counties, I have to refer to census data. However, some municipalites which are under two counties will be split into two parts in the census shapefile data. Thus, some processing is needed to combine them back into one municipalities. Indicators were derived from the financial numbers of DCED.")
+        )
     })
         
 
