@@ -130,7 +130,7 @@ ui <- dashboardPage(
                     ),
                     
                     fluidRow(
-                        box(DT::dataTableOutput(outputId = "table2"), width = 12)
+                        box(DT::dataTableOutput(outputId = "table1"), width = 12)
     )
 )
 )
@@ -161,7 +161,7 @@ server <- function(input, output) {
         return(a)
     })
     
-    # create reative subset for mutiple years data
+    # create reactive subset for multiple years data
     PA_subset_time_d <- reactive({
         req(input$year)
         req(input$type) 
@@ -279,8 +279,11 @@ server <- function(input, output) {
         
         ggplotly(
             ggplot(data = med_subset_time_1, aes(x = date, y = median)) +
+                # create line chart
                 geom_line(aes(color = Indicator)) +
+                # create points on line chart
                 geom_point(aes(color = Indicator)) +
+                # pick the year portion of the date and axis will be seperated by 3 years
                 scale_x_date(date_labels = "%Y", date_breaks = "3 years") +
                 xlab("Year") +
                 ylab("Revenue Per Capita") +
@@ -311,6 +314,7 @@ server <- function(input, output) {
             ) %>% 
             pivot_longer(c("Total","Tax","Charges & Fees","Intergovernmental", "Others"), names_to = "Type", values_to = "share")
         
+        ### relevel type
         med_subset_1$Type <- factor(med_subset_1$Type, levels = c("Others","Intergovernmental","Charges & Fees","Tax", "Total"))
         
         ### plot
@@ -320,9 +324,36 @@ server <- function(input, output) {
                 xlab("Revenue Type") + 
                 ylab("Median Share of Total Revenue(%)") +
                 labs(title = (paste("Types of Revenues In", max(input$year))))+ 
+                # flip x and y axis
                 coord_flip(),
             tooltip = c("y")    
         )
+    })
+    
+    
+    ### Create data table page 1-------------------------------
+    output$table1 <- DT::renderDataTable({
+        a <- DT::datatable(data = PA_subset()[,c(2:3,7:9,11,12,14,16,18)], 
+                           options = list(pageLength = 10), 
+                           rownames = FALSE,
+                           colnames = c("Year" = "Reporting_Year",
+                                        "Municipal" = "full_municipal_name",
+                                        "Type" = "Municipality_Type",
+                                        "Revenues" = "Total_Revenues",
+                                        "Surplus\nOr Deficits" = "Revenues_Over_Expenditures",
+                                        "Tax" = "Total_Taxes_Revenues",
+                                       "Charges\n& Fees" = "total_charges_and_fees_Revenues",  
+                                        "Intergovernmental" = "total_intergovernmental_Revenues",
+                                       "Others" = "total_other_Revenues",
+                                       "Population" = "Population"
+                           ),
+                           style = 'bootstrap',
+                           caption = 'Table 1: Revenue Breakdown',
+                           filter = 'top'
+        ) %>% 
+            DT::formatCurrency(5:9, digits = 0)
+        
+        return(a)
     })
         
 
