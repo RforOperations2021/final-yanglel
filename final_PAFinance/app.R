@@ -187,15 +187,16 @@ server <- function(input, output) {
     
     PA_subset_time <- debounce(PA_subset_time_d, 5000)
     
+    # create polygons with data
+    mapdata_1 <- reactive({
+    data@data <- merge(data@data, PA_subset(), by = "GEOID")
+    return(data)
+    })
     
     # Create leaflet map------------------------------
     output$map <- renderLeaflet({
         
-        # create polygons with data
-        data@data <- merge(data@data, PA_subset(), by = "GEOID")
-        
-        mapdata <- data
-        
+        mapdata <- mapdata_1()
         # pal <- reactive({
         # <- input$indicator
         # colorNumeric(
@@ -203,17 +204,9 @@ server <- function(input, output) {
         #     NULL)
         #     })
         
-        Rmap <- leaflet(mapdata) %>%
+        leaflet(mapdata) %>%
                 addProviderTiles(providers$CartoDB.Positron) %>% 
                 addPolygons()
-        
-        observeEvent(input$reset,{
-            
-        Rmap <- Rmap %>% 
-            clearBounds()
-        })
-        
-        return(Rmap)
         
         
         
@@ -229,6 +222,13 @@ server <- function(input, output) {
             # addProviderTiles(provider = providers$Wikimedia, group = "Wiki") %>%
             # setView(-74.0060, 40.7128, 9) %>%
             # addLayersControl(baseGroups = c("Google", "Wiki"))
+    })
+    
+    # reset zoom level
+    observeEvent(input$reset,{
+        mapdata <- mapdata_1()
+        leafletProxy("map", data = mapdata) %>% 
+            setView(lng = -77.1945, lat = 41.2033, zoom = 7)
     })
         
 
