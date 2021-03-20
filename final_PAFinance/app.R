@@ -11,6 +11,8 @@ require(leaflet)
 data <- readOGR("municipal_disso.shp",layer = "municipal_disso", GDAL1_integer64_policy = TRUE)
 load("PA_M_2006_2018_full.RData")
 
+data_1 <- subset(data, GEOID != 4204900000)
+
 # get number of years
 year_min <- min(PA_M_2006_2018_full$Reporting_Year)
 year_max <- max(PA_M_2006_2018_full$Reporting_Year)
@@ -27,7 +29,7 @@ PA_M_2006_2018_full$date <- as.Date(
 indi_name <- colnames(PA_M_2006_2018_full)[9:19]
 
 # Avoid plotly issues -----------------------------------
-pdf(NULL)
+#pdf(NULL)
 
 
 
@@ -180,14 +182,15 @@ server <- function(input, output) {
         return(a)
     })
     
-    # add debounce
-    PA_subset <- debounce(PA_subset_d, 5000)
+    # add debounce---------------------------------
+    PA_subset <- debounce(PA_subset_d, 2000)
     
-    PA_subset_time <- debounce(PA_subset_time_d, 5000)
+    PA_subset_time <- debounce(PA_subset_time_d, 2000)
     
-    # create polygons with data
+    # create polygons with data----------------------------
     mapdata_1 <- reactive({
         
+        # creating long table for filtering
         pivot_measure <- colnames(PA_subset())[c(9:19)]
 
         u2 <- PA_subset() %>%
@@ -196,25 +199,43 @@ server <- function(input, output) {
                 names_to = "Indicator",
                 values_to = "Amount"
             ) %>% 
-            filter(Indicator %in% input$indicator)
-    data@data <- merge(data@data,u2, by = "GEOID")
-    return(data)
+            filter(Indicator == input$indicator) %>% 
+            filter(!is.na(Amount))
+        
+    # merging of spatial with data
+    data_1@data <- merge(data_1@data,u2, by = "GEOID", all.x = TRUE) 
+    
+
+    return(data_1)
     })
     
     # Create leaflet map------------------------------
     output$map <- renderLeaflet({
-        # 
-        # indica <- input$indicator
-        # num <- which(colnames(PA_M_2006_2018_full) %in% indica)
+        leaflet() %>%
+            addProviderTiles(providers$CartoDB.Positron) %>% 
+            setView(lng = -77.5000, lat = 41.2033, zoom = 7)
+        })
+    
+    
+    # mapping changes to input---------------------
+    observe({
         mapdata <- mapdata_1()
-                                
-        pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
- 
         
-        leaflet(mapdata) %>%
-                addProviderTiles(providers$CartoDB.Positron) %>% 
-            addPolygons(data = mapdata$county_name) %>% 
-                addPolygons(fillColor = ~pal(Amount), 
+        # create color palette
+        pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
+        
+        NA_op <- function(x) {
+            ifelse(is.na(x), 0, 1)
+        }
+    
+        leafletProxy("map", data = mapdata) %>% 
+            # clear plot  
+            clearGroup("all") %>%
+             
+            # clear legend
+            clearControls() %>%
+            
+            addPolygons(fillColor = ~pal(Amount),
                             fillOpacity = 0.7,
                             weight = 1,
                             highlight = highlightOptions(
@@ -225,30 +246,21 @@ server <- function(input, output) {
                             popup = ~paste(
                                 full_municipal_name, "<br/>",
                                 Reporting_Year, "<br/>",
-                                "$", round(Amount, 2))) %>%
-            addLegend(pal = pal, values = ~Amount, opacity = 0.7, title = paste(input$indicator,"<br/>", "Quantile"), position = "bottomright")
-        
-        
-        
-        # %>% 
-        #         addPolygons(color = ~pal(input$indicator))
-        
-        
+                                paste("$", (scales::comma_format()(round(Amount,0) )))),
+                            group = "all") %>%
+            
+            addLegend(pal = pal, 
+                      values = ~Amount, 
+                      opacity = 0.7, 
+                      title = paste(input$indicator,"<br/>", "Quantile"), position = "bottomright")
+        })
 
-        
-        # leaflet(data = cds) %>%
-        #     addProviderTiles("Stamen.Toner") %>%
-        #     addPolygons(color = ~pal(`Life Expectancy at Birth (years)`)
-            # addProviderTiles(provider = providers$Wikimedia, group = "Wiki") %>%
-            # setView(-74.0060, 40.7128, 9) %>%
-            # addLayersControl(baseGroups = c("Google", "Wiki"))
-    })
     
     # reset zoom level
     observeEvent(input$reset,{
         mapdata <- mapdata_1()
         leafletProxy("map", data = mapdata) %>% 
-            setView(lng = -77.1945, lat = 41.2033, zoom = 7)
+            setView(lng = -77.5000, lat = 41.2033, zoom = 7)
     })
         
 
