@@ -141,11 +141,11 @@ ui <- dashboardPage(
                     # download button
                     fluidRow(
                         box(downloadButton(
-                        outputId = "download",
-                        label = "Download Data Table")
+                            outputId = "download",
+                            label = "Download Data Table")
                         )),
-                        
-                        br(),
+                    
+                    br(),
                     
                     fluidRow(
                         box(DT::dataTableOutput(outputId = "table1"), width = 12
@@ -167,8 +167,8 @@ ui <- dashboardPage(
 )
 
 
-            
-            
+
+
 
 
 # Define server logic ---------------------------
@@ -229,11 +229,11 @@ server <- function(input, output) {
         # remove NA shapes
         data_2 <- subset(data_1, GEOID %in% unique(u2$GEOID))
         
-    # merging of spatial with data
-    data_2@data <- left_join(data_2@data,u2, by = "GEOID") 
-    
-
-    return(data_2)
+        # merging of spatial with data
+        data_2@data <- left_join(data_2@data,u2, by = "GEOID") 
+        
+        
+        return(data_2)
     })
     
     ## Create leaflet map------------------------------
@@ -241,7 +241,7 @@ server <- function(input, output) {
         leaflet() %>%
             addProviderTiles(providers$CartoDB.Positron) %>% 
             setView(lng = -77.5000, lat = 41.2033, zoom = 7)
-        })
+    })
     
     
     ## mapping changes to input---------------------
@@ -250,34 +250,34 @@ server <- function(input, output) {
         
         # create color palette
         pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
-    
+        
         leafletProxy("map", data = mapdata) %>% 
             # clear plot  
             clearGroup("all") %>%
-             
+            
             # clear legend
             clearControls() %>%
             
             addPolygons(fillColor = ~pal(Amount),
-                            fillOpacity = 0.6,
-                            weight = 1,
-                            highlight = highlightOptions(
-                                weight = 5,
-                                color = "black",
-                                fillOpacity = 0.7,
-                                bringToFront = TRUE),
-                            popup = ~paste(
-                                full_municipal_name, "<br/>",
-                                Reporting_Year, "<br/>",
-                                paste("$", (scales::comma_format()(round(Amount,0) )))),
-                            group = "all") %>%
+                        fillOpacity = 0.6,
+                        weight = 1,
+                        highlight = highlightOptions(
+                            weight = 5,
+                            color = "black",
+                            fillOpacity = 0.7,
+                            bringToFront = TRUE),
+                        popup = ~paste(
+                            full_municipal_name, "<br/>",
+                            Reporting_Year, "<br/>",
+                            paste("$", (scales::comma_format()(round(Amount,0) )))),
+                        group = "all") %>%
             
             addLegend(pal = pal, 
                       values = ~Amount, 
                       opacity = 0.7, 
                       title = paste(max(input$year), input$indicator,"<br/>", "Quantile"), position = "bottomright")
-        })
-
+    })
+    
     
     ## reset zoom level------------------------------
     observeEvent(input$reset,{
@@ -291,7 +291,7 @@ server <- function(input, output) {
         if (length(input$county_1) > 0) {
             county_1 <- subset(county_bound, COUNTY_NAM %in% toupper(PA_subset()$county_name))
         } else{
-        county_1 <- county_bound
+            county_1 <- county_bound
         }
         return(county_1)
     })
@@ -302,14 +302,14 @@ server <- function(input, output) {
     
     ## add county boundaries---------------- 
     observe({
-    leafletProxy("map", data = county_1()) %>%
-        # clear plot  
-        clearGroup("county") %>%
-        
-        addPolygons(weight = 3,
-                    fill = FALSE,
-                    color = "black",
-                    group = "county")
+        leafletProxy("map", data = county_1()) %>%
+            # clear plot  
+            clearGroup("county") %>%
+            
+            addPolygons(weight = 3,
+                        fill = FALSE,
+                        color = "black",
+                        group = "county")
     })
     
     ## line charts----------------------------------
@@ -351,7 +351,7 @@ server <- function(input, output) {
     
     ## bar chart---------------------------
     output$bar <- renderPlotly({
-
+        
         # create table of median percentage share
         med_subset_1 <- PA_subset() %>%
             mutate(
@@ -397,10 +397,10 @@ server <- function(input, output) {
                                         "Revenues" = "Total_Revenues",
                                         "Surplus\nOr Deficits" = "Revenues_Over_Expenditures",
                                         "Tax" = "Total_Taxes_Revenues",
-                                       "Charges\n& Fees" = "total_charges_and_fees_Revenues",  
+                                        "Charges\n& Fees" = "total_charges_and_fees_Revenues",  
                                         "Intergovernmental" = "total_intergovernmental_Revenues",
-                                       "Others" = "total_other_Revenues",
-                                       "Pop" = "Population"
+                                        "Others" = "total_other_Revenues",
+                                        "Pop" = "Population"
                            ),
                            style = 'bootstrap',
                            caption = 'Table 1: Revenue Breakdown',
@@ -440,10 +440,10 @@ server <- function(input, output) {
             p("To get accurate municipal names and its corresponding counties, I have to refer to census data. However, some municipalites which are under two counties will be split into two parts in the census shapefile data. Thus, some processing is needed to combine them back into one municipalities. Indicators were derived from the financial numbers of DCED.")
         )
     })
-        
-
-
-    }
+    
+    
+    
+}
 
 # Run the application ------------------------------
 shinyApp(ui = ui, server = server)
