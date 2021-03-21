@@ -60,9 +60,13 @@ ui <- dashboardPage(
                      tabName = "RA", 
                      icon = icon("money-bill-wave")),
             
+            menuItem("Download & Table", 
+                     tabName = "Table", 
+                     icon = icon("table")),
+            
             menuItem("Sources", 
                      tabName = "Source", 
-                     icon = icon("download")),
+                     icon = icon("book")),
             
             # reset zoom button
             actionButton(
@@ -113,7 +117,8 @@ ui <- dashboardPage(
                 label = "County Group(Type to search, backspace to delete)",
                 choices = county,
                 selectize = T ,
-                multiple =  T
+                multiple =  T,
+                selected = c("Allegheny","Armstrong","Washington","Beaver","Westmoreland")
             )
             
         )
@@ -138,21 +143,29 @@ ui <- dashboardPage(
                             height= "450px")
                     ),
                     
-                    # download button
-                    fluidRow(
-                        box(downloadButton(
-                            outputId = "download",
-                            label = "Download Data Table")
-                        )),
-                    
-                    br(),
-                    
-                    fluidRow(
-                        box(DT::dataTableOutput(outputId = "table1"), width = 12
-                        )
-                    )
+
             ),
-            ### Second page---------------------
+            
+            ### Second page ----------------------  
+            # download button
+            tabItem(tabName = "Table",
+                    h2("Datatable"),
+                    
+                    fluidRow(
+                box(downloadButton(
+                    outputId = "download",
+                    label = "Download Data Table")
+                )),
+            
+            br(),
+            
+            fluidRow(
+                box(DT::dataTableOutput(outputId = "table1"), width = 12
+                )
+            )
+            ),
+            
+            ### Third page---------------------
             tabItem(tabName = "Source",
                     h2("Source"),
                     
@@ -162,6 +175,8 @@ ui <- dashboardPage(
                         )
                     )
             )
+            
+            
         )
     )
 )
@@ -246,12 +261,11 @@ server <- function(input, output) {
     
     ## mapping changes to input---------------------
     observe({
-        mapdata <- mapdata_1()
         
         # create color palette
-        pal <- colorQuantile("RdBu", domain = mapdata$Amount, n = 5)
+        pal <- colorQuantile("RdBu", domain = mapdata_1()$Amount, n = 5)
         
-        leafletProxy("map", data = mapdata) %>% 
+        leafletProxy("map", data = mapdata_1()) %>% 
             # clear plot  
             clearGroup("all") %>%
             
@@ -281,28 +295,27 @@ server <- function(input, output) {
     
     ## reset zoom level------------------------------
     observeEvent(input$reset,{
-        mapdata <- mapdata_1()
-        leafletProxy("map", data = mapdata) %>% 
+        leafletProxy("map", data = mapdata_1()) %>% 
             setView(lng = -77.5000, lat = 41.2033, zoom = 7)
     })
     
     ## creating county subset----------------------------------
     county_a <- reactive({
         if (length(input$county_1) > 0) {
-            county_1 <- subset(county_bound, COUNTY_NAM %in% toupper(PA_subset()$county_name))
+            county_1 <- subset(county_bound, COUNTY_NAM %in% toupper(input$county_1))
         } else{
             county_1 <- county_bound
         }
         return(county_1)
     })
     
-    ## add debounce---------------------------------
-    # added to make sure the creation of the lines are done last when county selection changes
-    county_1 <- debounce(county_a, 2000)
+    # ## add debounce---------------------------------
+    # # added to make sure the creation of the lines are done last when county selection changes
+    # county_1 <- debounce(county_a, 2000)
     
     ## add county boundaries---------------- 
     observe({
-        leafletProxy("map", data = county_1()) %>%
+        leafletProxy("map", data = county_a()) %>%
             # clear plot  
             clearGroup("county") %>%
             
@@ -318,17 +331,15 @@ server <- function(input, output) {
         # change to longer to get indicator
         pivot_measure <- colnames(PA_subset_time())[c(9:19)]
         
-        u3 <- PA_subset_time() %>%
+        med_subset_time_1 <- PA_subset_time() %>%
             pivot_longer(
                 cols = all_of(pivot_measure),
                 names_to = "Indicator",
                 values_to = "Amount"
             ) %>% 
             filter(Indicator %in% c("Taxes_Per_Capita", "charges_and_fees_per_capita", "intergovernmental_per_capita", "other_Revenues_per_capita" )) %>% 
-            filter(!is.na(Amount))
-        
+            filter(!is.na(Amount)) %>%
         # create table of median
-        med_subset_time_1 <- u3 %>%
             group_by(Indicator,date) %>%
             summarize(median = median(Amount, na.rm = T))
         
@@ -388,7 +399,7 @@ server <- function(input, output) {
     
     ## Create data table-------------------------------
     output$table1 <- DT::renderDataTable({
-        a <- DT::datatable(data = PA_subset_time()[,c(2:3,7:9,11,12,14,16,18)], 
+        a <- DT::datatable(data = PA_subset()[,c(2:3,7:9,11,12,14,16,18)], 
                            options = list(pageLength = 10), 
                            rownames = FALSE,
                            colnames = c("Year" = "Reporting_Year",
@@ -403,8 +414,7 @@ server <- function(input, output) {
                                         "Pop" = "Population"
                            ),
                            style = 'bootstrap',
-                           caption = 'Table 1: Revenue Breakdown',
-                           filter = 'top'
+                           caption = 'Table 1: Revenue Breakdown'
         ) %>% 
             DT::formatCurrency(5:10, digits = 0)
         
